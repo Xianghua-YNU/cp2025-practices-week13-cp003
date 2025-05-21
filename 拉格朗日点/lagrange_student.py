@@ -32,14 +32,13 @@ def lagrange_equation(r):
     # [STUDENT_CODE_HERE]
     # 提示: 方程应该包含地球引力、月球引力和离心力的平衡关系
     
-    # 计算地球引力项
-    earth_gravity = G * M / (r ** 2)
-    # 计算月球引力项（注意方向）
-    moon_gravity = G * m / ((R - r) ** 2)
-    # 计算离心力项
-    centrifugal_force = omega ** 2 * r
-    # 返回力平衡方程结果
-    return earth_gravity - moon_gravity - centrifugal_force
+    moon_distance = R - r
+    if moon_distance <= 1e-6 or r <= 1e6:  # 物理约束保护
+        return np.inf
+    earth_gravity = G * M / r**2
+    moon_gravity = G * m / moon_distance**2
+    centrifugal = omega**2 * r
+    return earth_gravity - moon_gravity - centrifugal
 
 
 def lagrange_equation_derivative(r):
@@ -56,13 +55,12 @@ def lagrange_equation_derivative(r):
     # [STUDENT_CODE_HERE]
     # 提示: 对lagrange_equation函数求导
     
-    # 地球引力项的导数
-    earth_deriv = -2 * G * M / (r ** 3)
-    # 月球引力项的导数
-    moon_deriv = 2 * G * m / ((R - r) ** 3)
-    # 离心力项的导数
-    centrifugal_deriv = omega ** 2
-    return earth_deriv + moon_deriv - centrifugal_deriv
+    moon_distance = R - r
+    if moon_distance <= 1e-6 or r <= 1e6:
+        return np.inf
+    earth_deriv = -2 * G * M / r**3
+    moon_deriv = 2 * G * m / moon_distance**3
+    return earth_deriv + moon_deriv - omega**2
 
 def newton_method(f, df, x0, tol=1e-8, max_iter=100):
     """
@@ -82,28 +80,25 @@ def newton_method(f, df, x0, tol=1e-8, max_iter=100):
     # [STUDENT_CODE_HERE]
     # 提示: 迭代公式为 x_{n+1} = x_n - f(x_n)/df(x_n)
     
-    x = x0
-    iterations = 0
-    converged = False
-    
-    for _ in range(max_iter):
-        fx = f(x)
+    x = min(x0, 0.99*R)  # 初始约束
+    for i in range(max_iter):
+        try:
+            fx = f(x)
+            dfx = df(x)
+        except:
+            return x, i, False
+            
         if abs(fx) < tol:
-            converged = True
-            break
-        
-        dfx = df(x)
+            return x, i+1, True
+            
         if abs(dfx) < 1e-14:
             break
-        
-        x -= fx / dfx
-        iterations += 1
-        
-        if abs(fx) < tol:
-            converged = True
-            break
             
-    return x, iterations, converged
+        delta = fx / dfx
+        delta = np.clip(delta, -0.01*R, 0.01*R)  # 步长限制
+        x = max(1e6, min(0.999*R, x - delta))  # 物理范围约束
+        
+    return x, i+1, abs(fx) < tol
 
 
 def secant_method(f, a, b, tol=1e-8, max_iter=100):
@@ -126,27 +121,24 @@ def secant_method(f, a, b, tol=1e-8, max_iter=100):
     
     x0, x1 = a, b
     f0, f1 = f(x0), f(x1)
-    iterations = 0
-    converged = False
-    
-    for _ in range(max_iter):
-        if abs(f1) < tol:
-            converged = True
-            break
+    for i in range(max_iter):
+        if f0*f1 > 0:  # 确保区间有效性
+            x1 = 0.5*(x0 + x1)
+            f1 = f(x1)
+            continue
             
-        if abs(f1 - f0) < 1e-14:
-            break
-            
-        x_next = x1 - f1 * (x1 - x0) / (f1 - f0)
-        x0, x1 = x1, x_next
-        f0, f1 = f1, f(x1)
-        iterations += 1
+        delta = (x1 - x0)/(f1 - f0 + 1e-14)
+        x_next = x1 - f1 * delta
+        x_next = max(1e6, min(0.999*R, x_next))  # 物理约束
         
-        if abs(f1) < tol:
-            converged = True
-            break
+        f_next = f(x_next)
+        if abs(f_next) < tol:
+            return x_next, i+1, True
             
-    return x1, iterations, converged
+        x0, x1 = x1, x_next
+        f0, f1 = f1, f_next
+        
+    return x1, i+1, False
 
 
 def plot_lagrange_equation(r_min, r_max, num_points=1000):
@@ -194,48 +186,81 @@ def main():
     """
     主函数，执行L1拉格朗日点位置的计算和可视化
     """
-    # 1. 绘制方程图像，帮助选择初值
-    r_min = 3.0e8  # 搜索范围下限 (m)，约为地月距离的80%
-    r_max = 3.8e8  # 搜索范围上限 (m)，接近地月距离
+    # 1. 计算天体力学近似初始值
+    mass_ratio = m / (M + m)
+    r0_approx = R * (1 - (mass_ratio/3)**(1/3))  # 理论近似公式[1,4](@ref)
+
+    # 2. 绘制方程图像（调整范围避免R边界）
+    r_min = 0.7 * R  # 约2.69e8米
+    r_max = 0.95 * R # 约3.65e8米
     fig = plot_lagrange_equation(r_min, r_max)
     plt.savefig('lagrange_equation.png', dpi=300)
     plt.show()
-    
-    # 2. 使用牛顿法求解
-    print("\n使用牛顿法求解L1点位置:")
-    r0_newton = 3.5e8  # 初始猜测值 (m)，大约在地月距离的90%处
-    r_newton, iter_newton, conv_newton = newton_method(lagrange_equation, lagrange_equation_derivative, r0_newton)
+
+    # 3. 牛顿法求解（使用理论初始值）
+    print("\n=== 牛顿法求解L1点 ===")
+    r_newton, iter_newton, conv_newton = newton_method(
+        lagrange_equation, 
+        lagrange_equation_derivative, 
+        r0_approx,
+        tol=1e-8,
+        max_iter=100
+    )
     if conv_newton:
-        print(f"  收敛解: {r_newton:.8e} m")
-        print(f"  迭代次数: {iter_newton}")
-        print(f"  相对于地月距离的比例: {r_newton/R:.6f}")
+        print(f"收敛解: {r_newton:.8e} m")
+        print(f"迭代次数: {iter_newton}")
+        print(f"相对地月距离: {r_newton/R:.6f}")
     else:
-        print("  牛顿法未收敛!")
-    
-    # 3. 使用弦截法求解
-    print("\n使用弦截法求解L1点位置:")
-    a, b = 3.2e8, 3.7e8  # 初始区间 (m)
-    r_secant, iter_secant, conv_secant = secant_method(lagrange_equation, a, b)
+        print("警告：牛顿法未收敛！")
+
+    # 4. 弦截法求解（优化初始区间）
+    print("\n=== 弦截法求解L1点 ===")
+    a, b = 0.6*R, 0.9*R  # 确保包含零点[6,8](@ref)
+    r_secant, iter_secant, conv_secant = secant_method(
+        lagrange_equation, 
+        a, 
+        b,
+        tol=1e-8,
+        max_iter=100
+    )
     if conv_secant:
-        print(f"  收敛解: {r_secant:.8e} m")
-        print(f"  迭代次数: {iter_secant}")
-        print(f"  相对于地月距离的比例: {r_secant/R:.6f}")
+        print(f"收敛解: {r_secant:.8e} m")
+        print(f"迭代次数: {iter_secant}")
+        print(f"相对地月距离: {r_secant/R:.6f}")
     else:
-        print("  弦截法未收敛!")
-    
-    # 4. 使用SciPy的fsolve求解
-    print("\n使用SciPy的fsolve求解L1点位置:")
-    r0_fsolve = 3.5e8  # 初始猜测值 (m)
-    r_fsolve = optimize.fsolve(lagrange_equation, r0_fsolve)[0]
-    print(f"  收敛解: {r_fsolve:.8e} m")
-    print(f"  相对于地月距离的比例: {r_fsolve/R:.6f}")
-    
-    # 5. 比较不同方法的结果
+        print("警告：弦截法未收敛！")
+
+    # 5. SciPy验证（统一初始值）
+    print("\n=== SciPy fsolve验证 ===")
+    r_fsolve = optimize.fsolve(lagrange_equation, r0_approx)[0]
+    print(f"SciPy解: {r_fsolve:.8e} m")
+    print(f"相对地月距离: {r_fsolve/R:.6f}")
+
+    # 6. 综合对比（含理论值）
     if conv_newton and conv_secant:
-        print("\n不同方法结果比较:")
-        print(f"  牛顿法与弦截法的差异: {abs(r_newton-r_secant):.8e} m ({abs(r_newton-r_secant)/r_newton*100:.8f}%)")
-        print(f"  牛顿法与fsolve的差异: {abs(r_newton-r_fsolve):.8e} m ({abs(r_newton-r_fsolve)/r_newton*100:.8f}%)")
-        print(f"  弦截法与fsolve的差异: {abs(r_secant-r_fsolve):.8e} m ({abs(r_secant-r_fsolve)/r_secant*100:.8f}%)")
+        print("\n=== 结果对比 ===")
+        # 理论值计算[11](@ref)
+        theory_val = R * (1 - (mass_ratio/3)**(1/3))  
+        
+        # 各方法结果汇总
+        results = {
+            "牛顿法": r_newton,
+            "弦截法": r_secant,
+            "SciPy": r_fsolve,
+            "理论值": theory_val
+        }
+        
+        # 按距离排序输出
+        sorted_results = sorted(results.items(), key=lambda x: x[1])
+        for name, val in sorted_results:
+            print(f"{name:8} {val/R:.6f}R ({val:.3e} m)")
+        
+        # 误差分析
+        print("\n=== 相对误差 ===")
+        for name, val in results.items():
+            if name != "理论值":
+                error = abs((val - theory_val)/theory_val)*100
+                print(f"{name:8} 误差: {error:.6f}%")
 
 
 if __name__ == "__main__":
