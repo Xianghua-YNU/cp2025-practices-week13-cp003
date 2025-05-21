@@ -75,32 +75,38 @@ def newton_method(f, df, x0, tol=1e-8, max_iter=100):
     # [STUDENT_CODE_HERE]
     # 提示: 迭代公式为 x_{n+1} = x_n - f(x_n)/df(x_n)
     
-    x = np.clip(x0, 0.1*R, 0.95*R)  # 严格物理约束
-    prev_x = x0
+    def newton_method(f, df, x0, tol=1e-10, max_iter=100):
+    """改进的阻尼牛顿法实现"""
+    x = np.clip(x0, 0.1*R, 0.95*R)  # 物理范围约束[3,6](@ref)
+    prev_fx = np.inf
+    damping = 1.0  # 初始阻尼因子
+    
     for i in range(max_iter):
         try:
             fx = f(x)
             dfx = df(x)
         except:
             return x, i, False
-            
-        if abs(fx) < tol:
+        
+        # 收敛条件增强：函数值与步长双重检查[1,3](@ref)
+        if abs(fx) < tol and abs(x - prev_x) < 0.1*tol*R:
             return x, i+1, True
-            
-        if abs(dfx) < 1e-14:  # 防止零除
-            dfx = -np.sign(fx)*1e-14
-            
-        # 阻尼步长控制（动态调整）
-        delta = fx / dfx
-        max_step = 0.05 * R * (1 + i/10)  
+        
+        # 动态阻尼调整（网页2、6方法）
+        if abs(fx) >= abs(prev_fx):  
+            damping *= 0.5  # 函数值未下降时增强阻尼
+            damping = max(damping, 0.1)  # 最小阻尼限制
+        else:
+            damping = min(damping*1.1, 1.0)  # 恢复阻尼
+        
+        # 步长计算与限制
+        delta = fx / (dfx + 1e-14)  # 避免零除
+        max_step = 0.1 * R * damping  # 动态最大步长
         delta = np.clip(delta, -max_step, max_step)
         
-        # 防止振荡（连续两次同方向调整）
-        if abs(delta) > 0.5*abs(prev_x - x):
-            delta *= 0.5
-            
         prev_x = x
-        x = np.clip(x - delta, 0.1*R, 0.95*R)
+        prev_fx = fx
+        x = np.clip(x - delta, 0.1*R, 0.95*R)  # 物理约束
         
     return x, i+1, abs(fx) < tol
 
