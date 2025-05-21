@@ -24,7 +24,7 @@ def load_sunspot_data(url):
     data = np.loadtxt(url,usecols=(2,3), comments='#')
     years = data[:, 0]  # 第一列是年份
     sunspots = data[:, 1]  # 第二列是太阳黑子数
-    raise NotImplementedError("请在 {} 中实现此函数".format(__file__))
+
     return years, sunspots
      # 从URL下载数据
     response = urlopen(url)
@@ -64,7 +64,7 @@ def plot_sunspot_data(years, sunspots):
     plt.grid(True)
     plt.savefig('sunspot_time_series.png')
     plt.show()
-    raise NotImplementedError("请在 {} 中实现此函数".format(__file__))
+  
 
 def compute_power_spectrum(sunspots):
     """
@@ -82,7 +82,7 @@ def compute_power_spectrum(sunspots):
     yf = fft(sunspots)
     xf = fftfreq(N, 1)[:N//2]  # 每月一个数据点
     power = 2/N * np.abs(yf[0:N//2])
-    raise NotImplementedError("请在 {} 中实现此函数".format(__file__))
+   
     return frequencies, power
 
 def plot_power_spectrum(frequencies, power):
@@ -104,7 +104,7 @@ def plot_power_spectrum(frequencies, power):
     plt.grid(True)
     plt.savefig('sunspot_power_spectrum.png')
     plt.show()
-    raise NotImplementedError("请在 {} 中实现此函数".format(__file__))
+  
 
 def find_main_period(frequencies, power):
     """
@@ -122,7 +122,7 @@ def find_main_period(frequencies, power):
     # 跳过第一个频率（无穷大周期）
     idx = np.argmax(power[1:]) + 1
     main_period = 1/frequencies[idx]
-    raise NotImplementedError("请在 {} 中实现此函数".format(__file__))
+  
     return main_period
 
 def main():
