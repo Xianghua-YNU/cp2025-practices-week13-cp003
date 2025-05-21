@@ -32,9 +32,14 @@ def lagrange_equation(r):
     # [STUDENT_CODE_HERE]
     # 提示: 方程应该包含地球引力、月球引力和离心力的平衡关系
     
-    raise NotImplementedError("请在 {} 中实现此函数。".format(__file__))
-    
-    return equation_value
+    # 计算地球引力项
+    earth_gravity = G * M / (r ** 2)
+    # 计算月球引力项（注意方向）
+    moon_gravity = G * m / ((R - r) ** 2)
+    # 计算离心力项
+    centrifugal_force = omega ** 2 * r
+    # 返回力平衡方程结果
+    return earth_gravity - moon_gravity - centrifugal_force
 
 
 def lagrange_equation_derivative(r):
@@ -51,10 +56,13 @@ def lagrange_equation_derivative(r):
     # [STUDENT_CODE_HERE]
     # 提示: 对lagrange_equation函数求导
     
-    raise NotImplementedError("请在 {} 中实现此函数。".format(__file__))
-    
-    return derivative_value
-
+    # 地球引力项的导数
+    earth_deriv = -2 * G * M / (r ** 3)
+    # 月球引力项的导数
+    moon_deriv = 2 * G * m / ((R - r) ** 3)
+    # 离心力项的导数
+    centrifugal_deriv = omega ** 2
+    return earth_deriv + moon_deriv - centrifugal_deriv
 
 def newton_method(f, df, x0, tol=1e-8, max_iter=100):
     """
@@ -74,8 +82,27 @@ def newton_method(f, df, x0, tol=1e-8, max_iter=100):
     # [STUDENT_CODE_HERE]
     # 提示: 迭代公式为 x_{n+1} = x_n - f(x_n)/df(x_n)
     
-    raise NotImplementedError("请在 {} 中实现此函数。".format(__file__))
+    x = x0
+    iterations = 0
+    converged = False
     
+    for _ in range(max_iter):
+        fx = f(x)
+        if abs(fx) < tol:
+            converged = True
+            break
+        
+        dfx = df(x)
+        if abs(dfx) < 1e-14:
+            break
+        
+        x -= fx / dfx
+        iterations += 1
+        
+        if abs(fx) < tol:
+            converged = True
+            break
+            
     return x, iterations, converged
 
 
@@ -97,9 +124,29 @@ def secant_method(f, a, b, tol=1e-8, max_iter=100):
     # [STUDENT_CODE_HERE]
     # 提示: 迭代公式为 x_{n+1} = x_n - f(x_n)*(x_n-x_{n-1})/(f(x_n)-f(x_{n-1}))
     
-    raise NotImplementedError("请在 {} 中实现此函数。".format(__file__))
+    x0, x1 = a, b
+    f0, f1 = f(x0), f(x1)
+    iterations = 0
+    converged = False
     
-    return x, iterations, converged
+    for _ in range(max_iter):
+        if abs(f1) < tol:
+            converged = True
+            break
+            
+        if abs(f1 - f0) < 1e-14:
+            break
+            
+        x_next = x1 - f1 * (x1 - x0) / (f1 - f0)
+        x0, x1 = x1, x_next
+        f0, f1 = f1, f(x1)
+        iterations += 1
+        
+        if abs(f1) < tol:
+            converged = True
+            break
+            
+    return x1, iterations, converged
 
 
 def plot_lagrange_equation(r_min, r_max, num_points=1000):
@@ -118,7 +165,27 @@ def plot_lagrange_equation(r_min, r_max, num_points=1000):
     # [STUDENT_CODE_HERE]
     # 提示: 在合适的范围内绘制函数图像，标记零点位置
     
-    raise NotImplementedError("请在 {} 中实现此函数。".format(__file__))
+    r_values = np.linspace(r_min, r_max, num_points)
+    f_values = [lagrange_equation(r) for r in r_values]
+    
+    fig = plt.figure(figsize=(10, 6))
+    ax = fig.add_subplot(111)
+    
+    # 绘制函数曲线
+    ax.plot(r_values/R, f_values, label='L1 Equation')
+    
+    # 标记零点位置
+    zero_crossings = np.where(np.diff(np.sign(f_values)))[0]
+    for idx in zero_crossings:
+        r_zero = r_values[idx] - f_values[idx] * (r_values[idx+1] - r_values[idx]) / (f_values[idx+1] - f_values[idx])
+        ax.plot(r_zero/R, 0, 'ro', label='Zero Crossing')
+    
+    ax.axhline(0, color='k', linestyle='--', alpha=0.5)
+    ax.set_xlabel('Normalized Distance (Earth-Moon distance)')
+    ax.set_ylabel('Equation Value')
+    ax.set_title('L1 Lagrange Point Equation')
+    ax.legend()
+    ax.grid(True)
     
     return fig
 
