@@ -32,10 +32,17 @@ def lagrange_equation(r):
     # [STUDENT_CODE_HERE]
     # 提示: 方程应该包含地球引力、月球引力和离心力的平衡关系
     
-    raise NotImplementedError("请在 {} 中实现此函数。".format(__file__))
+    # 地球引力
+    earth_gravity = G * M / (r**2)
     
-    return equation_value
-
+    # 月球引力 (注意方向与地球引力相反)
+    moon_gravity = G * m / ((R - r)**2)
+    
+    # 离心力
+    centrifugal_force = omega**2 * r
+    
+    # 力平衡方程
+    return earth_gravity - moon_gravity - centrifugal_force
 
 def lagrange_equation_derivative(r):
     """
@@ -51,11 +58,18 @@ def lagrange_equation_derivative(r):
     # [STUDENT_CODE_HERE]
     # 提示: 对lagrange_equation函数求导
     
-    raise NotImplementedError("请在 {} 中实现此函数。".format(__file__))
+    # 地球引力项的导数
+    earth_gravity_derivative = -2 * G * M / (r**3)
     
-    return derivative_value
-
-
+    # 月球引力项的导数
+    moon_gravity_derivative = -2 * G * m / ((R - r)**3)
+    
+    # 离心力项的导数
+    centrifugal_force_derivative = omega**2
+    
+    # 导数方程
+    return earth_gravity_derivative + moon_gravity_derivative - centrifugal_force_derivative
+    
 def newton_method(f, df, x0, tol=1e-8, max_iter=100):
     """
     使用牛顿法（切线法）求解方程f(x)=0
@@ -73,11 +87,35 @@ def newton_method(f, df, x0, tol=1e-8, max_iter=100):
     # TODO: 实现牛顿法 (约15行代码)
     # [STUDENT_CODE_HERE]
     # 提示: 迭代公式为 x_{n+1} = x_n - f(x_n)/df(x_n)
+    x = x0
+    iterations = 0
+    converged = False
     
-    raise NotImplementedError("请在 {} 中实现此函数。".format(__file__))
+    for i in range(max_iter):
+        fx = f(x)
+        if abs(fx) < tol:
+            converged = True
+            iterations = i + 1
+            break
+        
+        dfx = df(x)
+        if abs(dfx) < 1e-14:  # 避免除以接近零的数
+            break
+        
+        delta = fx / dfx
+        x_new = x - delta
+        
+        # 检查相对变化是否小于容差
+        if abs(delta / x) < tol:
+            converged = True
+            iterations = i + 1
+            x = x_new
+            break
+        
+        x = x_new
+        iterations = i + 1
     
     return x, iterations, converged
-
 
 def secant_method(f, a, b, tol=1e-8, max_iter=100):
     """
@@ -97,9 +135,51 @@ def secant_method(f, a, b, tol=1e-8, max_iter=100):
     # [STUDENT_CODE_HERE]
     # 提示: 迭代公式为 x_{n+1} = x_n - f(x_n)*(x_n-x_{n-1})/(f(x_n)-f(x_{n-1}))
     
-    raise NotImplementedError("请在 {} 中实现此函数。".format(__file__))
+    fa = f(a)
+    fb = f(b)
     
-    return x, iterations, converged
+    if abs(fa) < tol:
+        return a, 0, True
+    if abs(fb) < tol:
+        return b, 0, True
+    
+    if fa * fb > 0:  # 确保区间端点函数值异号
+        print("警告: 区间端点函数值同号，弦截法可能不收敛")
+    
+    iterations = 0
+    converged = False
+    
+    x0, x1 = a, b
+    f0, f1 = fa, fb
+    
+    for i in range(max_iter):
+        # 避免除以接近零的数
+        if abs(f1 - f0) < 1e-14:
+            break
+        
+        # 弦截法迭代公式
+        x2 = x1 - f1 * (x1 - x0) / (f1 - f0)
+        f2 = f(x2)
+        
+        if abs(f2) < tol:  # 函数值接近零
+            converged = True
+            iterations = i + 1
+            x1 = x2
+            break
+        
+        # 检查相对变化是否小于容差
+        if abs((x2 - x1) / x1) < tol:
+            converged = True
+            iterations = i + 1
+            x1 = x2
+            break
+        
+        # 更新迭代值
+        x0, f0 = x1, f1
+        x1, f1 = x2, f2
+        iterations = i + 1
+    
+    return x1, iterations, converged
 
 
 def plot_lagrange_equation(r_min, r_max, num_points=1000):
@@ -118,10 +198,46 @@ def plot_lagrange_equation(r_min, r_max, num_points=1000):
     # [STUDENT_CODE_HERE]
     # 提示: 在合适的范围内绘制函数图像，标记零点位置
     
-    raise NotImplementedError("请在 {} 中实现此函数。".format(__file__))
+    r_values = np.linspace(r_min, r_max, num_points)
+    f_values = np.array([lagrange_equation(r) for r in r_values])
+    
+    # 寻找零点附近的位置
+    zero_crossings = np.where(np.diff(np.signbit(f_values)))[0]
+    r_zeros = []
+    for idx in zero_crossings:
+        r1, r2 = r_values[idx], r_values[idx + 1]
+        f1, f2 = f_values[idx], f_values[idx + 1]
+        # 线性插值找到更精确的零点
+        r_zero = r1 - f1 * (r2 - r1) / (f2 - f1)
+        r_zeros.append(r_zero)
+    
+    # 创建图形
+    fig, ax = plt.subplots(figsize=(10, 6))
+    
+    # 绘制函数曲线
+    ax.plot(r_values / 1e8, f_values, 'b-', label='L1 point equation')
+    
+    # 标记零点
+    for r_zero in r_zeros:
+        ax.plot(r_zero / 1e8, 0, 'ro', label=f'Zero point: {r_zero:.4e} m')
+    
+    # 添加水平和垂直参考线
+    ax.axhline(y=0, color='k', linestyle='--', alpha=0.3)
+    
+    # 设置坐标轴标签和标题
+    ax.set_xlabel('Distance from Earth center (10^8 m)')
+    ax.set_ylabel('Equation value')
+    ax.set_title('L1 Lagrange Point Equation')
+    
+    # 添加图例，只显示一次
+    handles, labels = ax.get_legend_handles_labels()
+    unique_labels = dict(zip(labels, handles))
+    ax.legend(unique_labels.values(), unique_labels.keys())
+    
+    # 添加网格
+    ax.grid(True, alpha=0.3)
     
     return fig
-
 
 def main():
     """
@@ -169,7 +285,6 @@ def main():
         print(f"  牛顿法与弦截法的差异: {abs(r_newton-r_secant):.8e} m ({abs(r_newton-r_secant)/r_newton*100:.8f}%)")
         print(f"  牛顿法与fsolve的差异: {abs(r_newton-r_fsolve):.8e} m ({abs(r_newton-r_fsolve)/r_newton*100:.8f}%)")
         print(f"  弦截法与fsolve的差异: {abs(r_secant-r_fsolve):.8e} m ({abs(r_secant-r_fsolve)/r_secant*100:.8f}%)")
-
 
 if __name__ == "__main__":
     main()
