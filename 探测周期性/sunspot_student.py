@@ -21,12 +21,30 @@ def load_sunspot_data(url):
     """
     # TODO: 使用np.loadtxt读取数据，只保留第2(年份)和3(太阳黑子数)列
     # [STUDENT_CODE_HERE]
-    ur1="../__pycache__"
-    data = np.loadtxt(ur1)
+    data = np.loadtxt(url)
     years = data[:, 0]  # 第一列是年份
     sunspots = data[:, 1]  # 第二列是太阳黑子数
     raise NotImplementedError("请在 {} 中实现此函数".format(__file__))
     return years, sunspots
+     # 从URL下载数据
+    response = urlopen(url)
+    data = response.read().decode('utf-8').split('\n')
+    
+    # 解析数据
+    years = []
+    months = []
+    sunspots = []
+    
+    for line in data:
+        if line.startswith('#') or not line.strip():
+            continue
+        parts = line.split()
+        if len(parts) >= 4:
+            years.append(float(parts[0]))
+            months.append(float(parts[1]))
+            sunspots.append(float(parts[3]))
+    
+    return np.array(years), np.array(months), np.array(sunspots)
 
 def plot_sunspot_data(years, sunspots):
     """
