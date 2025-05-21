@@ -106,6 +106,12 @@ def main():
     for n, ref in enumerate(reference_levels):
         print(f"能级 {n}: {ref:.3f} eV")
 
+    # 计算相对误差
+    print("\n相对误差:")
+    for n, (calc, ref) in enumerate(zip(energy_levels, reference_levels)):
+        rel_error = abs(calc - ref) / ref * 100
+        print(f"能级 {n}: {rel_error:.2f}%")
+
 
 if __name__ == "__main__":
     main()
