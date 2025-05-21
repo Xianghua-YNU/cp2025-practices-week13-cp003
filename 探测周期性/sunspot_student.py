@@ -21,7 +21,7 @@ def load_sunspot_data(url):
     """
     # TODO: 使用np.loadtxt读取数据，只保留第2(年份)和3(太阳黑子数)列
     # [STUDENT_CODE_HERE]
-    data = np.loadtxt(url)
+    data = np.loadtxt(url,usecols=(2,3), comments='#')
     years = data[:, 0]  # 第一列是年份
     sunspots = data[:, 1]  # 第二列是太阳黑子数
     raise NotImplementedError("请在 {} 中实现此函数".format(__file__))
