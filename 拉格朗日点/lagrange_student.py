@@ -32,14 +32,11 @@ def lagrange_equation(r):
     # [STUDENT_CODE_HERE]
     # 提示: 方程应该包含地球引力、月球引力和离心力的平衡关系
     
-    moon_distance = R - r
-    if moon_distance <= 1e-6 or r <= 1e6:  # 物理约束保护
-        return np.inf
+    moon_dist = max(R - r, 1e-6)  
     earth_gravity = G * M / r**2
-    moon_gravity = G * m / moon_distance**2
+    moon_gravity = G * m / moon_dist**2
     centrifugal = omega**2 * r
     return earth_gravity - moon_gravity - centrifugal
-
 
 def lagrange_equation_derivative(r):
     """
@@ -55,11 +52,9 @@ def lagrange_equation_derivative(r):
     # [STUDENT_CODE_HERE]
     # 提示: 对lagrange_equation函数求导
     
-    moon_distance = R - r
-    if moon_distance <= 1e-6 or r <= 1e6:
-        return np.inf
+    moon_dist = max(R - r, 1e-6)
     earth_deriv = -2 * G * M / r**3
-    moon_deriv = 2 * G * m / moon_distance**3
+    moon_deriv = 2 * G * m / moon_dist**3
     return earth_deriv + moon_deriv - omega**2
 
 def newton_method(f, df, x0, tol=1e-8, max_iter=100):
@@ -80,7 +75,8 @@ def newton_method(f, df, x0, tol=1e-8, max_iter=100):
     # [STUDENT_CODE_HERE]
     # 提示: 迭代公式为 x_{n+1} = x_n - f(x_n)/df(x_n)
     
-    x = min(x0, 0.99*R)  # 初始约束
+    x = np.clip(x0, 0.1*R, 0.95*R)  # 严格物理约束
+    prev_x = x0
     for i in range(max_iter):
         try:
             fx = f(x)
@@ -91,12 +87,20 @@ def newton_method(f, df, x0, tol=1e-8, max_iter=100):
         if abs(fx) < tol:
             return x, i+1, True
             
-        if abs(dfx) < 1e-14:
-            break
+        if abs(dfx) < 1e-14:  # 防止零除
+            dfx = -np.sign(fx)*1e-14
             
+        # 阻尼步长控制（动态调整）
         delta = fx / dfx
-        delta = np.clip(delta, -0.01*R, 0.01*R)  # 步长限制
-        x = max(1e6, min(0.999*R, x - delta))  # 物理范围约束
+        max_step = 0.05 * R * (1 + i/10)  
+        delta = np.clip(delta, -max_step, max_step)
+        
+        # 防止振荡（连续两次同方向调整）
+        if abs(delta) > 0.5*abs(prev_x - x):
+            delta *= 0.5
+            
+        prev_x = x
+        x = np.clip(x - delta, 0.1*R, 0.95*R)
         
     return x, i+1, abs(fx) < tol
 
@@ -119,24 +123,32 @@ def secant_method(f, a, b, tol=1e-8, max_iter=100):
     # [STUDENT_CODE_HERE]
     # 提示: 迭代公式为 x_{n+1} = x_n - f(x_n)*(x_n-x_{n-1})/(f(x_n)-f(x_{n-1}))
     
-    x0, x1 = a, b
+    x0, x1 = np.clip(a, 0.6*R, 0.95*R), np.clip(b, 0.6*R, 0.95*R)
     f0, f1 = f(x0), f(x1)
+    
+    # 强制初始区间有效性
+    for _ in range(5):  # 最多尝试5次调整区间
+        if f0 * f1 < 0:
+            break
+        x1 = x0 + 0.1*(x1 - x0)
+        f1 = f(x1)
+    else:
+        return x1, 0, False
+
     for i in range(max_iter):
-        if f0*f1 > 0:  # 确保区间有效性
-            x1 = 0.5*(x0 + x1)
-            f1 = f(x1)
-            continue
-            
-        delta = (x1 - x0)/(f1 - f0 + 1e-14)
-        x_next = x1 - f1 * delta
-        x_next = max(1e6, min(0.999*R, x_next))  # 物理约束
+        # 数值稳定性处理
+        delta = (x1 - x0) / (f1 - f0 + 1e-14)
+        x_new = x1 - f1 * delta
+        x_new = np.clip(x_new, 0.6*R, 0.95*R)
         
-        f_next = f(x_next)
-        if abs(f_next) < tol:
-            return x_next, i+1, True
+        f_new = f(x_new)
+        if abs(f_new) < tol:
+            return x_new, i+1, True
             
-        x0, x1 = x1, x_next
-        f0, f1 = f1, f_next
+        # 选择保留符号相反的端点
+        if f_new * f1 < 0:
+            x0, f0 = x1, f1
+        x1, f1 = x_new, f_new
         
     return x1, i+1, False
 
@@ -160,107 +172,91 @@ def plot_lagrange_equation(r_min, r_max, num_points=1000):
     r_values = np.linspace(r_min, r_max, num_points)
     f_values = [lagrange_equation(r) for r in r_values]
     
-    fig = plt.figure(figsize=(10, 6))
+    fig = plt.figure(figsize=(12, 7))
     ax = fig.add_subplot(111)
     
-    # 绘制函数曲线
+    # 理论解标记
+    mass_ratio = m/(M + m)
+    theory_r = R * (1 - (mass_ratio/3)**(1/3))
+    ax.axvline(theory_r/R, color='green', linestyle='--', label='Theoretical L1')
+    
     ax.plot(r_values/R, f_values, label='L1 Equation')
     
-    # 标记零点位置
+    # 精确零点计算
     zero_crossings = np.where(np.diff(np.sign(f_values)))[0]
     for idx in zero_crossings:
-        r_zero = r_values[idx] - f_values[idx] * (r_values[idx+1] - r_values[idx]) / (f_values[idx+1] - f_values[idx])
-        ax.plot(r_zero/R, 0, 'ro', label='Zero Crossing')
+        r0, r1 = r_values[idx], r_values[idx+1]
+        f0, f1 = f_values[idx], f_values[idx+1]
+        r_zero = r0 - f0*(r1 - r0)/(f1 - f0)
+        ax.plot(r_zero/R, 0, 'ro', markersize=8, label='Numerical Solution' if idx==0 else "")
     
-    ax.axhline(0, color='k', linestyle='--', alpha=0.5)
+    ax.axhline(0, color='k', linestyle=':', alpha=0.5)
     ax.set_xlabel('Normalized Distance (Earth-Moon distance)')
     ax.set_ylabel('Equation Value')
-    ax.set_title('L1 Lagrange Point Equation')
-    ax.legend()
+    ax.set_title('L1 Lagrange Point Equation (Updated)')
+    ax.legend(loc='upper left')
     ax.grid(True)
-    
     return fig
 
-
 def main():
-    """
-    主函数，执行L1拉格朗日点位置的计算和可视化
-    """
-    # 1. 计算天体力学近似初始值
-    mass_ratio = m / (M + m)
-    r0_approx = R * (1 - (mass_ratio/3)**(1/3))  # 理论近似公式[1,4](@ref)
-
-    # 2. 绘制方程图像（调整范围避免R边界）
-    r_min = 0.7 * R  # 约2.69e8米
-    r_max = 0.95 * R # 约3.65e8米
+    # 精确理论解计算
+    mass_ratio = m/(M + m)
+    r0_approx = R * (1 - (mass_ratio/3)**(1/3))
+    
+    # 绘图范围优化
+    r_min, r_max = 0.6*R, 0.95*R
     fig = plot_lagrange_equation(r_min, r_max)
-    plt.savefig('lagrange_equation.png', dpi=300)
+    plt.savefig('lagrange_equation_v2.png', dpi=300, bbox_inches='tight')
     plt.show()
 
-    # 3. 牛顿法求解（使用理论初始值）
-    print("\n=== 牛顿法求解L1点 ===")
+    # 牛顿法求解（提升收敛精度）
+    print("\n=== 牛顿法求解 ===")
     r_newton, iter_newton, conv_newton = newton_method(
         lagrange_equation, 
-        lagrange_equation_derivative, 
+        lagrange_equation_derivative,
         r0_approx,
-        tol=1e-8,
+        tol=1e-10,
         max_iter=100
     )
-    if conv_newton:
-        print(f"收敛解: {r_newton:.8e} m")
-        print(f"迭代次数: {iter_newton}")
-        print(f"相对地月距离: {r_newton/R:.6f}")
-    else:
-        print("警告：牛顿法未收敛！")
-
-    # 4. 弦截法求解（优化初始区间）
-    print("\n=== 弦截法求解L1点 ===")
-    a, b = 0.6*R, 0.9*R  # 确保包含零点[6,8](@ref)
+    
+    # 弦截法求解（优化初始区间）
+    print("\n=== 弦截法求解 ===")
+    a, b = 0.7*R, 0.9*R  # 确保包含理论解[9](@ref)
     r_secant, iter_secant, conv_secant = secant_method(
-        lagrange_equation, 
-        a, 
-        b,
-        tol=1e-8,
+        lagrange_equation, a, b,
+        tol=1e-10,
         max_iter=100
     )
-    if conv_secant:
-        print(f"收敛解: {r_secant:.8e} m")
-        print(f"迭代次数: {iter_secant}")
-        print(f"相对地月距离: {r_secant/R:.6f}")
-    else:
-        print("警告：弦截法未收敛！")
+    
+    # SciPy验证（增加容错）
+    print("\n=== SciPy验证 ===")
+    try:
+        r_fsolve = optimize.fsolve(
+            lagrange_equation, 
+            r0_approx,
+            fprime=lagrange_equation_derivative,
+            xtol=1e-10
+        )[0]
+    except:
+        r_fsolve = optimize.root_scalar(
+            lagrange_equation,
+            bracket=[0.7*R, 0.95*R],
+            xtol=1e-10
+        ).root
 
-    # 5. SciPy验证（统一初始值）
-    print("\n=== SciPy fsolve验证 ===")
-    r_fsolve = optimize.fsolve(lagrange_equation, r0_approx)[0]
-    print(f"SciPy解: {r_fsolve:.8e} m")
-    print(f"相对地月距离: {r_fsolve/R:.6f}")
-
-    # 6. 综合对比（含理论值）
+    # 结果对比（增加单位转换）
     if conv_newton and conv_secant:
-        print("\n=== 结果对比 ===")
-        # 理论值计算[11](@ref)
-        theory_val = R * (1 - (mass_ratio/3)**(1/3))  
+        theory_m = R * (1 - (mass_ratio/3)**(1/3))
+        print(f"\n理论解: {theory_m/R:.6f}R ({theory_m/1000:.2f} km)")
         
-        # 各方法结果汇总
+        print("\n=== 数值解对比 ===")
         results = {
-            "牛顿法": r_newton,
-            "弦截法": r_secant,
-            "SciPy": r_fsolve,
-            "理论值": theory_val
+            "Newton": r_newton,
+            "Secant": r_secant,
+            "SciPy": r_fsolve
         }
-        
-        # 按距离排序输出
-        sorted_results = sorted(results.items(), key=lambda x: x[1])
-        for name, val in sorted_results:
-            print(f"{name:8} {val/R:.6f}R ({val:.3e} m)")
-        
-        # 误差分析
-        print("\n=== 相对误差 ===")
         for name, val in results.items():
-            if name != "理论值":
-                error = abs((val - theory_val)/theory_val)*100
-                print(f"{name:8} 误差: {error:.6f}%")
+            print(f"{name:8} {val/R:.6f}R 误差: {abs(val - theory_m)/1000:.4f} km")
 
 
 if __name__ == "__main__":
