@@ -80,7 +80,7 @@ def compute_power_spectrum(sunspots):
     # [STUDENT_CODE_HERE]
     N = len(sunspots)
     yf = fft(sunspots)
-    xf = fftfreq(N, 1)[:N//2]  # 每月一个数据点
+    frequencies = fftfreq(N, 1)[:N//2]  # 每月一个数据点
     power = 2/N * np.abs(yf[0:N//2])
    
     return frequencies, power
